@@ -6,36 +6,79 @@ on:
       - main
       - feature/github_actions
 
+permissions: write-all
+
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-    permissions: write-all
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
-
+    env:
+      VCPKG_TRIPLET: ${{ matrix.os == 'windows-latest' && 'x64-windows' || 'x64-linux' }}
     steps:
       - uses: actions/checkout@v3
         with:
           submodules: true
 
-      - name: Install dependencies (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install libboost-test-dev -y
-
-      - name: Install dependencies (Windows)
-        if: matrix.os == 'windows-latest'
+      - name: Install vcpkg
+        shell: bash
         run: |
-          choco install boost-msvc-14.2 --version=1.78.0  # Или используйте vcpkg: git clone https://github.com/microsoft/vcpkg.git, etc.
-          # Для простоты предположим, Boost доступен; настройте по документации GitHub.
+          git clone https://github.com/microsoft/vcpkg.git
+          if [ "${{ matrix.os }}" == "windows-latest" ]; then
+            ./vcpkg/bootstrap-vcpkg.bat
+          else
+            ./vcpkg/bootstrap-vcpkg.sh
+          fi
 
-      - run: cmake . -DPATCH_VERSION=${{ github.run_number }}
-      - run: cmake --build .
-      - run: cmake --build . --target test
-      - run: cmake --build . --target package
+      - name: Install Boost
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" == "windows-latest" ]; then
+            ./vcpkg/vcpkg install boost-test:${{ env.VCPKG_TRIPLET }}
+          else
+            ./vcpkg/vcpkg install boost-test:${{ env.VCPKG_TRIPLET }}
+          fi
+
+      - name: Configure CMake
+        shell: bash
+        run: cmake -S . -B build -DPATCH_VERSION=${{ github.run_number }} -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=${{ env.VCPKG_TRIPLET }}
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        run: cmake --build build --target test
+
+      - name: Package
+        run: cmake --build build --target package
+
+      - name: Upload Package Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.os }}
+          path: helloworld-1.0.${{ github.run_number }}-*.{deb,zip}
+          retention-days: 1
+
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: write
+    steps:
+      - name: Download Ubuntu Package
+        uses: actions/download-artifact@v4
+        with:
+          name: package-ubuntu-latest
+          path: ubuntu-package
+
+      - name: Download Windows Package
+        uses: actions/download-artifact@v4
+        with:
+          name: package-windows-latest
+          path: windows-package
 
       - name: Create Release
-        if: matrix.os == 'ubuntu-latest'
         id: create_release
         uses: actions/create-release@v1
         env:
@@ -46,26 +89,22 @@ jobs:
           draft: false
           prerelease: false
 
-      - name: Upload Release Asset (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
-        id: upload-release-asset-ubuntu
+      - name: Upload Ubuntu Asset
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./helloworld-1.0.${{ github.run_number }}-Linux.deb
+          asset_path: ubuntu-package/helloworld-1.0.${{ github.run_number }}-Linux.deb
           asset_name: helloworld-1.0.${{ github.run_number }}-Linux.deb
           asset_content_type: application/vnd.debian.binary-package
 
-      - name: Upload Release Asset (Windows)
-        if: matrix.os == 'windows-latest'
-        id: upload-release-asset-windows
+      - name: Upload Windows Asset
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}  # Но create_release только на Ubuntu; для Windows нужно синхронизировать или отдельно.
-          asset_path: ./helloworld-1.0.${{ github.run_number }}-win64.zip  # CPack на Windows генерирует ZIP.
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: windows-package/helloworld-1.0.${{ github.run_number }}-win64.zip
           asset_name: helloworld-1.0.${{ github.run_number }}-win64.zip
           asset_content_type: application/zip
