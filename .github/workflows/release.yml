@@ -42,11 +42,11 @@ jobs:
 
       - name: Set VCPKG_TOOLCHAIN
         shell: bash
-        run: echo "VCPKG_TOOLCHAIN=$(echo ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake | tr '\\' '/')" >> $GITHUB_ENV
+        run: echo "VCPKG_TOOLCHAIN='${{ github.workspace }}'/vcpkg/scripts/buildsystems/vcpkg.cmake" >> $GITHUB_ENV
 
       - name: Configure CMake
         shell: bash
-        run: cmake -S . -B build -DPATCH_VERSION=${{ github.run_number }} -DCMAKE_TOOLCHAIN_FILE="${{ env.VCPKG_TOOLCHAIN }}" -DVCPKG_TARGET_TRIPLET=${{ env.VCPKG_TRIPLET }}
+        run: cmake -S . -B build -DPATCH_VERSION=${{ github.run_number }} -DCMAKE_TOOLCHAIN_FILE='${{ env.VCPKG_TOOLCHAIN }}' -DVCPKG_TARGET_TRIPLET=${{ env.VCPKG_TRIPLET }}
 
       - name: Build
         run: cmake --build build
