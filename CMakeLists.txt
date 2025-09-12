@@ -5,7 +5,13 @@ set(PROJECT_VERSION 0.0.${PATCH_VERSION})
 
 project(helloworld VERSION ${PROJECT_VERSION})
 
-find_package(Boost COMPONENTS unit_test_framework REQUIRED)
+# Поиск Boost с разными опциями для разных систем
+if(WIN32)
+    # На Windows используем vcpkg, поэтому простой поиск
+    find_package(Boost REQUIRED COMPONENTS unit_test_framework)
+else()
+    find_package(Boost COMPONENTS unit_test_framework REQUIRED)
+endif()
 
 configure_file(version.h.in version.h)
 
@@ -23,8 +29,8 @@ target_include_directories(helloworld
 )
 
 target_link_libraries(test_version
-    ${Boost_LIBRARIES}
     helloworld
+    Boost::unit_test_framework
 )
 
 target_link_libraries(helloworld_cli PRIVATE helloworld)
