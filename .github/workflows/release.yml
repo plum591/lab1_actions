@@ -18,16 +18,16 @@ jobs:
       run: sudo apt-get update && sudo apt-get install -y libboost-test-dev cmake build-essential
     
     - name: Configure CMake
-      run: cmake -B ${{github.workspace}}/build -DPATCH_VERSION=${{ github.run_number }}
+      run: cmake -B build -DPATCH_VERSION=${{ github.run_number }}
     
     - name: Build
-      run: cmake --build ${{github.workspace}}/build --config Release
+      run: cmake --build build --config Release
     
     - name: Run tests
-      run: cd ${{github.workspace}}/build && ctest -V
+      run: cd build && ctest -V
     
     - name: Package
-      run: cd ${{github.workspace}}/build && cpack
+      run: cd build && cpack
 
   build-windows:
     runs-on: windows-latest
@@ -36,17 +36,17 @@ jobs:
       with:
         submodules: true
         
-    - name: Install vcpkg and dependencies
+    - name: Setup vcpkg
       run: |
         git clone https://github.com/Microsoft/vcpkg.git
-        .\vcpkg\bootstrap-vcpkg.bat
-        .\vcpkg\vcpkg install boost-test:x64-windows
+        ./vcpkg/bootstrap-vcpkg.bat -disableMetrics
+    
+    - name: Install Boost
+      run: ./vcpkg/vcpkg install boost-test:x64-windows
     
     - name: Configure CMake
       run: |
-        mkdir build
-        cd build
-        cmake .. -DPATCH_VERSION=${{ github.run_number }} -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake
+        cmake -B build -DPATCH_VERSION=${{ github.run_number }} -DCMAKE_TOOLCHAIN_FILE=./vcpkg/scripts/buildsystems/vcpkg.cmake
     
     - name: Build
       run: cmake --build build --config Release
@@ -61,18 +61,25 @@ jobs:
       with:
         submodules: true
         
+    - name: Uninstall existing cmake (if needed)
+      run: |
+        brew uninstall cmake || true
+        
     - name: Install dependencies
-      run: brew install boost cmake
+      run: |
+        brew update
+        brew install boost
+        brew install cmake
     
     - name: Configure CMake
-      run: cmake -B ${{github.workspace}}/build -DPATCH_VERSION=${{ github.run_number }}
+      run: cmake -B build -DPATCH_VERSION=${{ github.run_number }}
     
     - name: Build
-      run: cmake --build ${{github.workspace}}/build --config Release
+      run: cmake --build build --config Release
     
     - name: Run tests
-      run: cd ${{github.workspace}}/build && ctest -V
-
+      run: cd build && ctest -V
+  
   create-release:
     needs: [build-ubuntu, build-windows, build-macos]
     runs-on: ubuntu-latest
