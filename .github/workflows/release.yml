@@ -11,13 +11,15 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Boost via Chocolatey
-        run: choco install boost -y
+        run: |
+          choco install boost-msvc-14.3 -y --version=1.84.0
+          echo "BOOST_ROOT=C:/local/boost_1_84_0" >> $env:GITHUB_ENV
 
       - name: Configure CMake
         run: |
           mkdir build
           cd build
-          cmake .. -DBOOST_ROOT="C:/local/boost_1_83_0"
+          cmake .. -DBOOST_ROOT="${{ env.BOOST_ROOT }}"
 
       - name: Build
         run: |
