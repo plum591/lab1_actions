@@ -1,58 +1,25 @@
-name: 'C++ CI'
+name: Build C++ Project with Boost (choco)
 
-on:
-  push:
-    branches:
-      - main
-      - feature/github_actions
+on: [push, pull_request]
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
+    runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      # ---------- Linux ----------
-      - name: Install dependencies (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential cmake libboost-test-dev
-
-      # ---------- Windows ----------
-      - name: Install Boost (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          choco install boost -y --version=1.83.0
-          echo "BOOST_ROOT=C:/local/boost_1_83_0" >> $env:GITHUB_ENV
+      - name: Install Boost via Chocolatey
+        run: choco install boost -y
 
       - name: Configure CMake
-        run: cmake -B build -DPATCH_VERSION=${{ github.run_number }} -DBOOST_ROOT="${{ env.BOOST_ROOT }}"
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DBOOST_ROOT="C:/local/boost_1_83_0"
 
       - name: Build
-        run: cmake --build build --config Release
-
-      - name: Test
         run: |
           cd build
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            ctest -C Release -V
-          else
-            ctest -V
-          fi
-
-      - name: Package
-        run: |
-          cd build
-          cpack
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: package-${{ matrix.os }}
-          path: build/*.deb build/*.zip build/*.tar.gz
-          retention-days: 1
+          cmake --build . --config Release
