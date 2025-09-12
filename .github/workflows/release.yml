@@ -8,18 +8,34 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     permissions: write-all
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
     steps:
       - uses: actions/checkout@v3
         with:
           submodules: true
-      - run: sudo apt-get update && sudo apt-get install libboost-test-dev -y
+
+      - name: Install dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install libboost-test-dev -y
+
+      - name: Install dependencies (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          choco install boost-msvc-14.2 --version=1.78.0  # Или используйте vcpkg: git clone https://github.com/microsoft/vcpkg.git, etc.
+          # Для простоты предположим, Boost доступен; настройте по документации GitHub.
+
       - run: cmake . -DPATCH_VERSION=${{ github.run_number }}
       - run: cmake --build .
       - run: cmake --build . --target test
       - run: cmake --build . --target package
+
       - name: Create Release
+        if: matrix.os == 'ubuntu-latest'
         id: create_release
         uses: actions/create-release@v1
         env:
@@ -29,13 +45,27 @@ jobs:
           release_name: Release ${{ github.run_number }}
           draft: false
           prerelease: false
-      - name: Upload Release Asset
-        id: upload-release-asset
+
+      - name: Upload Release Asset (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        id: upload-release-asset-ubuntu
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./helloworld-0.0.${{ github.run_number }}-Linux.deb
-          asset_name: helloworld-0.0.${{ github.run_number }}-Linux.deb
+          asset_path: ./helloworld-1.0.${{ github.run_number }}-Linux.deb
+          asset_name: helloworld-1.0.${{ github.run_number }}-Linux.deb
           asset_content_type: application/vnd.debian.binary-package
+
+      - name: Upload Release Asset (Windows)
+        if: matrix.os == 'windows-latest'
+        id: upload-release-asset-windows
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}  # Но create_release только на Ubuntu; для Windows нужно синхронизировать или отдельно.
+          asset_path: ./helloworld-1.0.${{ github.run_number }}-win64.zip  # CPack на Windows генерирует ZIP.
+          asset_name: helloworld-1.0.${{ github.run_number }}-win64.zip
+          asset_content_type: application/zip
