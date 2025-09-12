@@ -36,23 +36,23 @@ jobs:
       with:
         submodules: true
         
-    - name: Setup MinGW
-      uses: egor-tensin/setup-mingw@v1
-      with:
-        platform: x64
-    
-    - name: Install dependencies
+    - name: Install vcpkg and dependencies
       run: |
-        pacman -S --noconfirm mingw-w64-x86_64-boost
+        git clone https://github.com/Microsoft/vcpkg.git
+        .\vcpkg\bootstrap-vcpkg.bat
+        .\vcpkg\vcpkg install boost-test:x64-windows
     
     - name: Configure CMake
-      run: cmake -B build -DPATCH_VERSION=${{ github.run_number }} -G "MinGW Makefiles"
+      run: |
+        mkdir build
+        cd build
+        cmake .. -DPATCH_VERSION=${{ github.run_number }} -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake
     
     - name: Build
       run: cmake --build build --config Release
     
     - name: Run tests
-      run: cd build && ctest -V
+      run: cd build && ctest -C Release -V
 
   build-macos:
     runs-on: macos-latest
