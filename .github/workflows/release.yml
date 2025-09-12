@@ -15,7 +15,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     env:
-      VCPKG_TRIPLET: ${{ matrix.os == 'windows-latest' && 'x64-windows' || 'x64-linux' }}
+      VCPKG_TRIPLET: ${{ matrix.os == 'windows-latest' && 'x64-windows-static' || 'x64-linux' }}
     steps:
       - uses: actions/checkout@v3
         with:
