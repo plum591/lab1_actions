@@ -46,7 +46,6 @@ jobs:
   linux-build:
     runs-on: ubuntu-latest
     name: 'Linux Build'
-    permissions: write-all
 
     steps:
       - uses: actions/checkout@v3
@@ -68,19 +67,20 @@ jobs:
   release:
     runs-on: ubuntu-latest
     needs: [windows-build, linux-build]
-    permissions: write-all
+    if: github.event_name == 'push'
+
     steps:
       - name: Download Windows Artifact
         uses: actions/download-artifact@v4
         with:
           name: windows-package
-          path: ./artifacts
+          path: ./windows-artifact
 
       - name: Download Linux Artifact
         uses: actions/download-artifact@v4
         with:
           name: linux-package
-          path: ./artifacts
+          path: ./linux-artifact
 
       - name: Create Release
         id: create_release
@@ -99,7 +99,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./artifacts/helloworld-0.0.${{ github.run_number }}-win64.zip
+          asset_path: ./windows-artifact/*.zip
           asset_name: helloworld-0.0.${{ github.run_number }}-win64.zip
           asset_content_type: application/zip
 
@@ -109,6 +109,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./artifacts/helloworld-0.0.${{ github.run_number }}-Linux.deb
+          asset_path: ./linux-artifact/*.deb
           asset_name: helloworld-0.0.${{ github.run_number }}-Linux.deb
           asset_content_type: application/vnd.debian.binary-package
