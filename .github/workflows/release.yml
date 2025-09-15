@@ -14,7 +14,6 @@ jobs:
 
     outputs:
       new_tag: ${{ steps.bump_version.outputs.new_tag }}
-      last_tag: ${{ steps.get_tag.outputs.last_tag }}
 
     steps:
       - uses: actions/checkout@v3
@@ -28,22 +27,31 @@ jobs:
           # Получаем последний тег или используем v0.0.0 если тегов нет
           last_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
           echo "last_tag=${last_tag}" >> $GITHUB_OUTPUT
-          echo "last_tag=${last_tag}" >> $GITHUB_ENV
+          echo "LAST_TAG=${last_tag}" >> $GITHUB_ENV
 
       - name: Bump version
         id: bump_version
         run: |
-          clean_tag="${last_tag#v}"
+          # Убираем 'v' из начала тега
+          clean_tag="${LAST_TAG#v}"
           echo "Clean tag: $clean_tag"
           
+          # Разбиваем на компоненты, гарантируя 3 компонента
           IFS='.' read -r major minor patch <<< "$clean_tag"
+          
+          # Если какие-то компоненты пустые, устанавливаем значения по умолчанию
+          major=${major:-0}
+          minor=${minor:-0}
+          patch=${patch:-0}
+          
           echo "Major: $major, Minor: $minor, Patch: $patch"
           
+          # Увеличиваем patch версию
           patch=$((patch + 1))
           new_tag="v$major.$minor.$patch"
           
           echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
-          echo "new_tag=$new_tag" >> $GITHUB_ENV
+          echo "NEW_TAG=$new_tag" >> $GITHUB_ENV
           echo "New tag: $new_tag"
 
   build-linux:
@@ -159,7 +167,13 @@ jobs:
           path: .
 
       - name: List downloaded files
-        run: ls -la
+        run: |
+          echo "=== Files in current directory ==="
+          ls -la
+          echo "=== Files from linux package ==="
+          ls -la *.deb || echo "No DEB files found"
+          echo "=== Files from windows package ==="
+          ls -la *.zip || echo "No ZIP files found"
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
