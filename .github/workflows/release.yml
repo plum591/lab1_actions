@@ -25,23 +25,26 @@ jobs:
         id: get_tag
         run: |
           git fetch --tags --force
-          last_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")
-          echo "last_tag=$last_tag" >> $GITHUB_ENV
-          echo "last_tag=$last_tag" >> $GITHUB_OUTPUT
+          # Получаем последний тег или используем v0.0.0 если тегов нет
+          last_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "last_tag=${last_tag}" >> $GITHUB_OUTPUT
+          echo "last_tag=${last_tag}" >> $GITHUB_ENV
 
       - name: Bump version
         id: bump_version
         run: |
-          IFS='.' read -r major minor patch <<< "${last_tag//v/}"
+          clean_tag="${last_tag#v}"
+          echo "Clean tag: $clean_tag"
+          
+          IFS='.' read -r major minor patch <<< "$clean_tag"
+          echo "Major: $major, Minor: $minor, Patch: $patch"
+          
           patch=$((patch + 1))
           new_tag="v$major.$minor.$patch"
-          echo "new_tag=$new_tag" >> $GITHUB_ENV
+          
           echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
-
-      - name: Show version info
-        run: |
-          echo "Last tag: ${{ env.last_tag }}"
-          echo "New tag: ${{ env.new_tag }}"
+          echo "new_tag=$new_tag" >> $GITHUB_ENV
+          echo "New tag: $new_tag"
 
   build-linux:
     runs-on: ubuntu-latest
@@ -140,6 +143,8 @@ jobs:
     
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Download Linux package
         uses: actions/download-artifact@v4
@@ -155,13 +160,6 @@ jobs:
 
       - name: List downloaded files
         run: ls -la
-
-      - name: Create git tag
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git tag ${{ needs.bump-version.outputs.new_tag }}
-          git push origin ${{ needs.bump-version.outputs.new_tag }}
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
