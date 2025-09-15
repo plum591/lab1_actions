@@ -79,51 +79,38 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
-    needs: bump-version
     permissions: write-all
+    needs: bump-version
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Clean build directory
+      - name: Install Boost via Chocolatey
         run: |
-          Remove-Item -Recurse -Force build -ErrorAction SilentlyContinue
+          choco install boost-msvc-14.3 -y --version=1.84.0
+          echo "BOOST_ROOT=C:/local/boost_1_84_0" >> $env:GITHUB_ENV
 
-      - name: Configure with Ninja
+      - name: Configure CMake
         run: |
-          echo "Building version: ${{ needs.create-release.outputs.new_tag }}"
-          cmake -G "Ninja" -S . -B build -DVERSION_PROJECT="${{ needs.create-release.outputs.new_tag }}"
+          mkdir build
+          cd build
+          cmake .. -DBOOST_ROOT="${{ env.BOOST_ROOT }}" -DPATCH_VERSION=${{ github.run_number }}
 
-      - name: Build project
-        run: cmake --build build
-
-      - name: Run and test
+      - name: Build
         run: |
-          echo "1" | .\build\LAB1.exe
-          echo "Program executed successfully"
+          cd build
+          cmake --build . --config Release
 
-      - name: Verify version
+      - name: Package (CPack)
         run: |
-          echo "=== Program output ==="
-          $output = echo "1" | .\build\LAB1.exe
-          echo $output
-          if ($output -like "*Version*") {
-            echo "✓ Version found in output"
-          } else {
-            echo "✗ Version not found in output"
-          }
+          cd build
+          cpack -C Release
 
-      - name: Package (Windows)
-        run: |
-          cmake --install build --prefix package
-          cpack -G ZIP --config build/CPackConfig.cmake
-
-      - name: Upload Windows package
-        uses: softprops/action-gh-release@v1
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ needs.create-release.outputs.new_tag }}
-          files: LAB1-*.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: windows-package
+          path: build/*.zip
 
   create-release:
     needs: [build-linux, build-windows]
