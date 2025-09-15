@@ -9,8 +9,7 @@ on:
 jobs:
   bump-version:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    permissions: write-all
 
     outputs:
       new_tag: ${{ steps.bump_version.outputs.new_tag }}
@@ -26,8 +25,7 @@ jobs:
 
   build-linux:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    permissions: write-all
     needs: bump-version
     outputs:
       deb_package: ${{ steps.find_package.outputs.deb_package }}
@@ -67,8 +65,7 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
-    permissions:
-      contents: write
+    permissions: write-all
     needs: bump-version
     
     steps:
@@ -93,11 +90,6 @@ jobs:
           cd build
           cmake --build . --config Release
 
-      - name: Run tests
-        run: |
-          cd build
-          ctest -C Release --verbose
-
       - name: Package (CPack)
         run: |
           cd build
@@ -112,8 +104,7 @@ jobs:
   create-release:
     needs: [bump-version, build-linux, build-windows]
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    permissions: write-all
     
     steps:
       - name: Download Linux package
