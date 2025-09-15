@@ -16,40 +16,10 @@ jobs:
       new_tag: ${{ steps.bump_version.outputs.new_tag }}
 
     steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Get latest tag
-        id: get_tag
-        run: |
-          git fetch --tags --force
-          last_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v1.0.0")
-          echo "last_tag=${last_tag}" >> $GITHUB_OUTPUT
-          echo "LAST_TAG=${last_tag}" >> $GITHUB_ENV
-
-      - name: Bump version
+      - name: Generate version from run number
         id: bump_version
         run: |
-          if [[ ! $LAST_TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Last tag $LAST_TAG doesn't follow semver format, using v1.0.0 as base"
-            new_tag="v1.0.${{ github.run_number }}"
-          else
-            clean_tag="${LAST_TAG#v}"
-            echo "Clean tag: $clean_tag"
-            
-            IFS='.' read -r major minor patch <<< "$clean_tag"
-            
-            major=${major:-1}
-            minor=${minor:-0}
-            patch=${patch:-0}
-            
-            echo "Major: $major, Minor: $minor, Patch: $patch"
-            
-            patch=$((patch + 1))
-            new_tag="v$major.$minor.$patch"
-          fi
-          
+          new_tag="v1.0.${{ github.run_number }}"
           echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
           echo "NEW_TAG=$new_tag" >> $GITHUB_ENV
           echo "New tag: $new_tag"
