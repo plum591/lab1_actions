@@ -6,11 +6,11 @@ on:
       - main
       - feature/github_actions
 
-
 jobs:
   bump-version:
     runs-on: ubuntu-latest
-    permissions: write-all
+    permissions:
+      contents: write
 
     outputs:
       new_tag: ${{ steps.bump_version.outputs.new_tag }}
@@ -45,45 +45,62 @@ jobs:
 
   build-linux:
     runs-on: ubuntu-latest
-    permissions: write-all
+    permissions:
+      contents: write
     needs: bump-version
+    outputs:
+      deb_package: ${{ steps.find_package.outputs.deb_package }}
+    
     steps:
       - uses: actions/checkout@v3
         with:
           submodules: true
-      - run: sudo apt-get update && sudo apt-get install libboost-test-dev -y
-      - run: cmake . -DPATCH_VERSION=${{ github.run_number }}
-      - run: cmake --build .
-      - run: cmake --build . --target test
-      - run: cmake --build . --target package
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install libboost-test-dev -y
+      
+      - name: Configure CMake
+        run: |
+          cmake . \
+            -DPATCH_VERSION=${{ github.run_number }} \
+            -DVERSION_PROJECT="${{ needs.bump-version.outputs.new_tag }}" \
+            -DCMAKE_BUILD_TYPE=Release
+      
+      - name: Build project
+        run: cmake --build . --config Release
+      
+      - name: Run tests
+        run: ./test_version
+      
+      - name: Create package
+        run: cmake --build . --target package --config Release
+      
+      - name: Find DEB package
+        id: find_package
+        run: |
+          deb_file=$(ls *.deb | head -1)
+          echo "deb_package=$deb_file" >> $GITHUB_OUTPUT
+          echo "Found package: $deb_file"
+      
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ github.run_number }}
-          release_name: Release ${{ github.run_number }}
-          draft: false
-          prerelease: false
-      - name: Upload Release Asset
-        id: upload-release-asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./helloworld-0.0.${{ github.run_number }}-Linux.deb
-          asset_name: helloworld-0.0.${{ github.run_number }}-Linux.deb
-          asset_content_type: application/vnd.debian.binary-package
+          name: linux-package
+          path: ${{ steps.find_package.outputs.deb_package }}
 
   build-windows:
     runs-on: windows-latest
-    permissions: write-all
+    permissions:
+      contents: write
     needs: bump-version
+    outputs:
+      zip_package: ${{ steps.find_package.outputs.zip_package }}
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          submodules: true
 
       - name: Install Boost via Chocolatey
         run: |
@@ -94,42 +111,61 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. -DBOOST_ROOT="${{ env.BOOST_ROOT }}" -DPATCH_VERSION=${{ github.run_number }}
+          cmake .. \
+            -DBOOST_ROOT="${{ env.BOOST_ROOT }}" \
+            -DPATCH_VERSION=${{ github.run_number }} \
+            -DVERSION_PROJECT="${{ needs.bump-version.outputs.new_tag }}" \
+            -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
         run: |
           cd build
           cmake --build . --config Release
 
+      - name: Run tests
+        run: |
+          cd build
+          ./Release/test_version.exe
+
       - name: Package (CPack)
         run: |
           cd build
           cpack -C Release
 
-      - name: Upload Windows Artifact
+      - name: Find ZIP package
+        id: find_package
+        run: |
+          $zipFile = (Get-ChildItem -Path "build" -Filter "*.zip").Name
+          echo "zip_package=$zipFile" >> $env:GITHUB_OUTPUT
+          echo "Found package: $zipFile"
+
+      - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-package
-          path: build/*.zip
+          path: build/${{ steps.find_package.outputs.zip_package }}
 
   create-release:
     needs: [build-linux, build-windows]
     runs-on: ubuntu-latest
-    permissions: write-all
+    permissions:
+      contents: write
+    
     steps:
-      - uses: actions/checkout@v3
-
       - name: Download Linux package
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: linux-package
           path: .
 
       - name: Download Windows package
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: windows-package
           path: .
+
+      - name: List downloaded files
+        run: ls -la
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -138,7 +174,7 @@ jobs:
           name: Release ${{ needs.bump-version.outputs.new_tag }}
           generate_release_notes: true
           files: |
-            ${{ needs.build-linux.outputs.deb_package }}
-            ${{ needs.build-windows.outputs.zip_package }}
+            *.deb
+            *.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
