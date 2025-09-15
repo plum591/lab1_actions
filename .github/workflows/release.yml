@@ -93,29 +93,15 @@ jobs:
           cd build
           cmake --build . --config Release
 
+      - name: Run tests
+        run: |
+          cd build
+          ctest -C Release --verbose
+
       - name: Package (CPack)
         run: |
           cd build
           cpack -C Release -V
-
-      - name: List generated packages (Windows compatible)
-        run: |
-          cd build
-          echo "Generated packages:"
-          Get-ChildItem -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "*.zip" -or $_.Name -like "*.exe" -or $_.Name -like "*.msi" }
-
-      - name: Find ZIP package
-        id: find_package
-        run: |
-          cd build
-          $zipFile = (Get-ChildItem -Filter "*.zip" | Select-Object -First 1).Name
-          if (-not $zipFile) {
-            echo "No ZIP file found! Listing all files:"
-            Get-ChildItem
-            exit 1
-          }
-          echo "zip_package=$zipFile" >> $env:GITHUB_OUTPUT
-          echo "Found package: $zipFile"
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
