@@ -69,6 +69,12 @@ set(CPACK_PACKAGE_CONTACT example@example.com)
 
 include(CPack)
 
+if(WIN32)
+    set(CPACK_GENERATOR ZIP)
+else()
+    set(CPACK_GENERATOR DEB)
+endif()
+
 enable_testing()
 
 add_test(test_version test_version)

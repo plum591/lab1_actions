@@ -41,7 +41,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install libboost-test-dev -y
       
       - name: Configure CMake
-        run: cmake . -DPATCH_VERSION=${{ github.run_number }} -DVERSION_PROJECT="${{ needs.bump-version.outputs.new_tag }}"
+        run: cmake . -DPATCH_VERSION=${{ github.run_number }}"
       
       - name: Build project
         run: cmake --build .
@@ -70,8 +70,6 @@ jobs:
     permissions:
       contents: write
     needs: bump-version
-    outputs:
-      zip_package: ${{ steps.find_package.outputs.zip_package }}
     
     steps:
       - name: Checkout repository
@@ -88,7 +86,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. -DBOOST_ROOT="${{ env.BOOST_ROOT }}" -DPATCH_VERSION=${{ github.run_number }} -DVERSION_PROJECT="${{ needs.bump-version.outputs.new_tag }}"
+          cmake .. -DBOOST_ROOT="${{ env.BOOST_ROOT }}" -DPATCH_VERSION=${{ github.run_number }}
 
       - name: Build
         run: |
@@ -120,30 +118,17 @@ jobs:
       contents: write
     
     steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
       - name: Download Linux package
         uses: actions/download-artifact@v4
         with:
           name: linux-package
-          path: .
+          path: artifacts/linux
 
       - name: Download Windows package
         uses: actions/download-artifact@v4
         with:
           name: windows-package
-          path: .
-
-      - name: List downloaded files
-        run: |
-          echo "=== Files in current directory ==="
-          ls -la
-          echo "=== Files from linux package ==="
-          ls -la *.deb || echo "No DEB files found"
-          echo "=== Files from windows package ==="
-          ls -la *.zip || echo "No ZIP files found"
+          path: artifacts/windows
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -152,7 +137,7 @@ jobs:
           name: Release ${{ needs.bump-version.outputs.new_tag }}
           generate_release_notes: true
           files: |
-            *.deb
-            *.zip
+            artifacts/linux/*.deb
+            artifacts/windows/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
