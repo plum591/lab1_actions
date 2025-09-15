@@ -24,31 +24,31 @@ jobs:
         id: get_tag
         run: |
           git fetch --tags --force
-          # Получаем последний тег или используем v0.0.0 если тегов нет
-          last_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          last_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v1.0.0")
           echo "last_tag=${last_tag}" >> $GITHUB_OUTPUT
           echo "LAST_TAG=${last_tag}" >> $GITHUB_ENV
 
       - name: Bump version
         id: bump_version
         run: |
-          # Убираем 'v' из начала тега
-          clean_tag="${LAST_TAG#v}"
-          echo "Clean tag: $clean_tag"
-          
-          # Разбиваем на компоненты, гарантируя 3 компонента
-          IFS='.' read -r major minor patch <<< "$clean_tag"
-          
-          # Если какие-то компоненты пустые, устанавливаем значения по умолчанию
-          major=${major:-0}
-          minor=${minor:-0}
-          patch=${patch:-0}
-          
-          echo "Major: $major, Minor: $minor, Patch: $patch"
-          
-          # Увеличиваем patch версию
-          patch=$((patch + 1))
-          new_tag="v$major.$minor.$patch"
+          if [[ ! $LAST_TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Last tag $LAST_TAG doesn't follow semver format, using v1.0.0 as base"
+            new_tag="v1.0.${{ github.run_number }}"
+          else
+            clean_tag="${LAST_TAG#v}"
+            echo "Clean tag: $clean_tag"
+            
+            IFS='.' read -r major minor patch <<< "$clean_tag"
+            
+            major=${major:-1}
+            minor=${minor:-0}
+            patch=${patch:-0}
+            
+            echo "Major: $major, Minor: $minor, Patch: $patch"
+            
+            patch=$((patch + 1))
+            new_tag="v$major.$minor.$patch"
+          fi
           
           echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
           echo "NEW_TAG=$new_tag" >> $GITHUB_ENV
