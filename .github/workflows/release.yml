@@ -96,12 +96,24 @@ jobs:
       - name: Package (CPack)
         run: |
           cd build
-          cpack -C Release
-
+          cpack -C Release -V
+          
+      - name: List generated packages
+        run: |
+          cd build
+          echo "Generated packages:"
+          ls -la *.zip *.exe *.msi 2>/dev/null || echo "No packages found"
+          
       - name: Find ZIP package
         id: find_package
         run: |
-          $zipFile = (Get-ChildItem -Path "build" -Filter "*.zip").Name
+          cd build
+          $zipFile = (Get-ChildItem -Filter "*.zip").Name
+          if (-not $zipFile) {
+            echo "No ZIP file found! Listing all files:"
+            Get-ChildItem
+            exit 1
+          }
           echo "zip_package=$zipFile" >> $env:GITHUB_OUTPUT
           echo "Found package: $zipFile"
 
@@ -130,14 +142,39 @@ jobs:
           name: windows-package
           path: artifacts/windows
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ needs.bump-version.outputs.new_tag }}
-          name: Release ${{ needs.bump-version.outputs.new_tag }}
-          generate_release_notes: true
-          files: |
-            artifacts/linux/*.deb
-            artifacts/windows/*.zip
+      - name: Debug - List downloaded files
+        run: |
+          echo "=== Linux artifacts ==="
+          ls -la artifacts/linux/ || echo "No linux artifacts"
+          echo "=== Windows artifacts ==="
+          ls -la artifacts/windows/ || echo "No windows artifacts"
+          echo "=== Current directory ==="
+          ls -la
+
+      - name: Debug - Find all package files
+        run: |
+          find . -name "*.deb" -o -name "*.zip" | while read file; do
+            echo "Found package: $file"
+          done
+
+      - name: Create Release with explicit file paths
+        run: |
+          # Найдем конкретные файлы
+          DEB_FILE=$(find . -name "*.deb" -type f | head -1)
+          ZIP_FILE=$(find . -name "*.zip" -type f | head -1)
+          
+          if [ -f "$DEB_FILE" ] && [ -f "$ZIP_FILE" ]; then
+            echo "Uploading files: $DEB_FILE and $ZIP_FILE"
+            gh release create "${{ needs.bump-version.outputs.new_tag }}" \
+              --title "Release ${{ needs.bump-version.outputs.new_tag }}" \
+              --notes "Automated release" \
+              "$DEB_FILE" \
+              "$ZIP_FILE"
+          else
+            echo "Error: Missing package files!"
+            echo "DEB exists: $( [ -f "$DEB_FILE" ] && echo "yes" || echo "no" )"
+            echo "ZIP exists: $( [ -f "$ZIP_FILE" ] && echo "yes" || echo "no" )"
+            exit 1
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
