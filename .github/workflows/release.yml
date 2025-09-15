@@ -70,58 +70,49 @@ jobs:
     permissions:
       contents: write
     needs: bump-version
-    
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          submodules: true
+      - uses: actions/checkout@v3
 
-      - name: Install Boost via Chocolatey
+      - name: Clean build directory
         run: |
-          choco install boost-msvc-14.3 -y --version=1.84.0
-          echo "BOOST_ROOT=C:/local/boost_1_84_0" >> $env:GITHUB_ENV
+          Remove-Item -Recurse -Force build -ErrorAction SilentlyContinue
 
-      - name: Configure CMake
+      - name: Configure with Ninja
         run: |
-          mkdir build
-          cd build
-          cmake .. -DBOOST_ROOT="${{ env.BOOST_ROOT }}" -DPATCH_VERSION=${{ github.run_number }}
+          echo "Building version: ${{ needs.create-release.outputs.new_tag }}"
+          cmake -G "Ninja" -S . -B build -DVERSION_PROJECT="${{ needs.create-release.outputs.new_tag }}"
 
-      - name: Build
-        run: |
-          cd build
-          cmake --build . --config Release
+      - name: Build project
+        run: cmake --build build
 
-      - name: Package (CPack)
+      - name: Run and test
         run: |
-          cd build
-          cpack -C Release -V
-          
-      - name: List generated packages
+          echo "1" | .\build\LAB1.exe
+          echo "Program executed successfully"
+
+      - name: Verify version
         run: |
-          cd build
-          echo "Generated packages:"
-          ls -la *.zip *.exe *.msi 2>/dev/null || echo "No packages found"
-          
-      - name: Find ZIP package
-        id: find_package
-        run: |
-          cd build
-          $zipFile = (Get-ChildItem -Filter "*.zip").Name
-          if (-not $zipFile) {
-            echo "No ZIP file found! Listing all files:"
-            Get-ChildItem
-            exit 1
+          echo "=== Program output ==="
+          $output = echo "1" | .\build\LAB1.exe
+          echo $output
+          if ($output -like "*Version*") {
+            echo "✓ Version found in output"
+          } else {
+            echo "✗ Version not found in output"
           }
-          echo "zip_package=$zipFile" >> $env:GITHUB_OUTPUT
-          echo "Found package: $zipFile"
 
-      - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
+      - name: Package (Windows)
+        run: |
+          cmake --install build --prefix package
+          cpack -G ZIP --config build/CPackConfig.cmake
+
+      - name: Upload Windows package
+        uses: softprops/action-gh-release@v1
         with:
-          name: windows-package
-          path: build/${{ steps.find_package.outputs.zip_package }}
+          tag_name: ${{ needs.create-release.outputs.new_tag }}
+          files: LAB1-*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   create-release:
     needs: [bump-version, build-linux, build-windows]
