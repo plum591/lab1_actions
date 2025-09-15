@@ -1,4 +1,4 @@
-name: 'C++ CI'
+name: C++ CI
 
 on:
   push:
@@ -6,10 +6,47 @@ on:
       - main
       - feature/github_actions
 
+
 jobs:
-  build:
+  bump-version:
     runs-on: ubuntu-latest
     permissions: write-all
+
+    outputs:
+      new_tag: ${{ steps.bump_version.outputs.new_tag }}
+      last_tag: ${{ steps.get_tag.outputs.last_tag }}
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Get latest tag
+        id: get_tag
+        run: |
+          git fetch --tags --force
+          last_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")
+          echo "last_tag=$last_tag" >> $GITHUB_ENV
+          echo "last_tag=$last_tag" >> $GITHUB_OUTPUT
+
+      - name: Bump version
+        id: bump_version
+        run: |
+          IFS='.' read -r major minor patch <<< "${last_tag//v/}"
+          patch=$((patch + 1))
+          new_tag="v$major.$minor.$patch"
+          echo "new_tag=$new_tag" >> $GITHUB_ENV
+          echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
+
+      - name: Show version info
+        run: |
+          echo "Last tag: ${{ env.last_tag }}"
+          echo "New tag: ${{ env.new_tag }}"
+
+  build-linux:
+    runs-on: ubuntu-latest
+    permissions: write-all
+    needs: bump-version
     steps:
       - uses: actions/checkout@v3
         with:
@@ -39,3 +76,85 @@ jobs:
           asset_path: ./helloworld-0.0.${{ github.run_number }}-Linux.deb
           asset_name: helloworld-0.0.${{ github.run_number }}-Linux.deb
           asset_content_type: application/vnd.debian.binary-package
+
+  build-windows:
+    needs: bump-version
+    runs-on: windows-latest
+    permissions: write-all
+    outputs:
+      zip_package: ${{ steps.find_package.outputs.zip_package }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Clean build directory
+        run: |
+          Remove-Item -Recurse -Force build -ErrorAction SilentlyContinue
+
+      - name: Configure with Ninja
+        run: |
+          echo "Building version: ${{ needs.bump-version.outputs.new_tag }}"
+          cmake -G "Ninja" -S . -B build -DVERSION_PROJECT="${{ needs.bump-version.outputs.new_tag }}"
+
+      - name: Build project
+        run: cmake --build build
+
+      - name: Run and test
+        run: |
+          echo "1" | .\build\LAB1.exe
+          echo "Program executed successfully"
+
+      - name: Verify version
+        run: |
+          echo "=== Program output ==="
+          $output = echo "1" | .\build\LAB1.exe
+          echo $output
+          if ($output -like "*Version*") {
+            echo "✓ Version found in output"
+          } else {
+            echo "✗ Version not found in output"
+            exit 1
+          }
+
+      - name: Package (Windows)
+        run: |
+          cmake --install build --prefix package
+          cpack -G ZIP --config build/CPackConfig.cmake
+
+      - name: Find ZIP package
+        id: find_package
+        run: |
+          $zipFile = (Get-ChildItem -Filter "LAB1-*.zip").Name
+          echo "zip_package=$zipFile" >> $env:GITHUB_OUTPUT
+          echo "Found package: $zipFile"
+
+  create-release:
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    permissions: write-all
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Download Linux package
+        uses: actions/download-artifact@v3
+        with:
+          name: linux-package
+          path: .
+
+      - name: Download Windows package
+        uses: actions/download-artifact@v3
+        with:
+          name: windows-package
+          path: .
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.bump-version.outputs.new_tag }}
+          name: Release ${{ needs.bump-version.outputs.new_tag }}
+          generate_release_notes: true
+          files: |
+            ${{ needs.build-linux.outputs.deb_package }}
+            ${{ needs.build-windows.outputs.zip_package }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
