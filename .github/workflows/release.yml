@@ -41,7 +41,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install libboost-test-dev -y
       
       - name: Configure CMake
-        run: cmake . -DPATCH_VERSION=${{ github.run_number }}"
+        run: cmake . -DPATCH_VERSION=${{ github.run_number }} -DVERSION_PROJECT="${{ needs.bump-version.outputs.new_tag }}"
       
       - name: Build project
         run: cmake --build .
