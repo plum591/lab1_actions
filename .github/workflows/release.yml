@@ -13,6 +13,7 @@ jobs:
 
     outputs:
       new_tag: ${{ steps.bump_version.outputs.new_tag }}
+      commit_count: ${{ steps.bump_version.outputs.commit_count }}
 
     steps:
       - uses: actions/checkout@v3
@@ -25,7 +26,8 @@ jobs:
           commit_count=$(git rev-list --count HEAD)
           new_tag="v1.0.$commit_count"
           echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
-          echo "NEW_TAG=$new_tag" >> $GITHUB_ENV
+          echo "commit_count=$commit_count" >> $GITHUB_OUTPUT
+          echo "Commit count: $commit_count"
           echo "New tag: $new_tag"
 
   build-linux:
@@ -39,13 +41,13 @@ jobs:
       - uses: actions/checkout@v3
         with:
           submodules: true
-          fetch-depth: 0  # Получаем всю историю коммитов
+          fetch-depth: 0
       
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install libboost-test-dev -y
       
       - name: Configure CMake
-        run: cmake . -DPATCH_VERSION=${{ needs.bump-version.outputs.new_tag }}
+        run: cmake . -DPATCH_VERSION=${{ needs.bump-version.outputs.commit_count }}
       
       - name: Build project
         run: cmake --build .
@@ -79,18 +81,26 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: true
-          fetch-depth: 0  # Получаем всю историю коммитов
+          fetch-depth: 0
 
       - name: Install Boost via Chocolatey
         run: |
           choco install boost-msvc-14.3 -y --version=1.84.0
           echo "BOOST_ROOT=C:/local/boost_1_84_0" >> $env:GITHUB_ENV
 
+      - name: Get commit count for Windows
+        id: get_commit_count
+        run: |
+          $commitCount = git rev-list --count HEAD
+          echo "commit_count=$commitCount" >> $env:GITHUB_OUTPUT
+          echo "COMMIT_COUNT=$commitCount" >> $env:GITHUB_ENV
+          echo "Commit count: $commitCount"
+
       - name: Configure CMake
         run: |
           mkdir build
           cd build
-          cmake .. -DBOOST_ROOT="${{ env.BOOST_ROOT }}" -DPATCH_VERSION=${{ needs.bump-version.outputs.new_tag }}
+          cmake .. -DBOOST_ROOT="$env:BOOST_ROOT" -DPATCH_VERSION=$env:COMMIT_COUNT
 
       - name: Build
         run: |
@@ -100,7 +110,7 @@ jobs:
       - name: Package (CPack)
         run: |
           cd build
-          cpack -C Release -V
+          cpack -C Release
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
