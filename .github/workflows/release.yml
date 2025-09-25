@@ -15,10 +15,15 @@ jobs:
       new_tag: ${{ steps.bump_version.outputs.new_tag }}
 
     steps:
-      - name: Generate version from run number
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Получаем всю историю коммитов
+          
+      - name: Get commit count
         id: bump_version
         run: |
-          new_tag="v1.0.${{ github.run_number }}"
+          commit_count=$(git rev-list --count HEAD)
+          new_tag="v1.0.$commit_count"
           echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
           echo "NEW_TAG=$new_tag" >> $GITHUB_ENV
           echo "New tag: $new_tag"
@@ -34,12 +39,13 @@ jobs:
       - uses: actions/checkout@v3
         with:
           submodules: true
+          fetch-depth: 0  # Получаем всю историю коммитов
       
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install libboost-test-dev -y
       
       - name: Configure CMake
-        run: cmake . -DPATCH_VERSION=${{ github.run_number }}
+        run: cmake . -DPATCH_VERSION=${{ needs.bump-version.outputs.new_tag }}
       
       - name: Build project
         run: cmake --build .
@@ -73,6 +79,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: true
+          fetch-depth: 0  # Получаем всю историю коммитов
 
       - name: Install Boost via Chocolatey
         run: |
@@ -83,7 +90,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. -DBOOST_ROOT="${{ env.BOOST_ROOT }}" -DPATCH_VERSION=${{ github.run_number }}
+          cmake .. -DBOOST_ROOT="${{ env.BOOST_ROOT }}" -DPATCH_VERSION=${{ needs.bump-version.outputs.new_tag }}
 
       - name: Build
         run: |

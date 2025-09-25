@@ -1,19 +1,20 @@
 cmake_minimum_required(VERSION 3.10)
 
 find_package(Git QUIET)
-
 if(GIT_FOUND)
     execute_process(
-        COMMAND ${GIT_EXECUTABLE} rev-list --count HEAD
+        COMMAND git rev-list --count HEAD
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         OUTPUT_VARIABLE GIT_COMMIT_COUNT
         OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
     )
 else()
-    set(GIT_COMMIT_COUNT 0)
+    set(GIT_COMMIT_COUNT "0")
 endif()
 
-set(PROJECT_VERSION 1.0.${GIT_COMMIT_COUNT})
+set(PATCH_VERSION "${GIT_COMMIT_COUNT}" CACHE INTERNAL "Patch version")
+set(PROJECT_VERSION 1.0.${PATCH_VERSION})
 
 project(helloworld VERSION ${PROJECT_VERSION})
 
@@ -66,8 +67,6 @@ else ()
         -Wall -Wextra -pedantic -Werror
     )
 endif()
-
-
 
 install(TARGETS helloworld_cli RUNTIME DESTINATION bin)
 
