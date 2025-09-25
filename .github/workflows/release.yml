@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # Получаем всю историю коммитов
+          fetch-depth: 0
           
       - name: Get commit count
         id: bump_version
@@ -88,19 +88,11 @@ jobs:
           choco install boost-msvc-14.3 -y --version=1.84.0
           echo "BOOST_ROOT=C:/local/boost_1_84_0" >> $env:GITHUB_ENV
 
-      - name: Get commit count for Windows
-        id: get_commit_count
-        run: |
-          $commitCount = git rev-list --count HEAD
-          echo "commit_count=$commitCount" >> $env:GITHUB_OUTPUT
-          echo "COMMIT_COUNT=$commitCount" >> $env:GITHUB_ENV
-          echo "Commit count: $commitCount"
-
       - name: Configure CMake
         run: |
           mkdir build
           cd build
-          cmake .. -DBOOST_ROOT="$env:BOOST_ROOT" -DPATCH_VERSION=$env:COMMIT_COUNT
+          cmake .. -DBOOST_ROOT="$env:BOOST_ROOT" -DPATCH_VERSION=${{ needs.bump-version.outputs.commit_count }}
 
       - name: Build
         run: |
@@ -116,7 +108,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-package
-          path: build/${{ steps.find_package.outputs.zip_package }}
+          path: build/*.zip
 
   create-release:
     needs: [bump-version, build-linux, build-windows]
